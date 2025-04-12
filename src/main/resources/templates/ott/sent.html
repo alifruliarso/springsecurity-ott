@@ -1,0 +1,13 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+        layout:decorate="~{layout}">
+    <head>
+        <title>OTT Sent</title>
+    </head>
+    <body>
+        <div layout:fragment="content">
+            <p>We just sent you an email. Please follow the provided link to log in.</p>
+            <p>For testing here is the <a th:href="${ottSubmitUrl}">submit link</a></p>
+        </div>
+    </body>
+</html>

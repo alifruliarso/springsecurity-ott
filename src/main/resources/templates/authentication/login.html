@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+    <div class="container">
+        <div class="row justify-content-center mt-5">
+            <div class="col-md-6 col-lg-4">
+                <div class="card shadow">
+                    <div class="card-body">
+                        <h3 class="text-center mb-4">Login</h3>
+                        
+                        <div th:if="${param.failed}" class="alert alert-danger">
+                            Invalid username or password
+                        </div>
+
+                        <!-- Nav tabs -->
+                        <ul class="nav nav-tabs nav-fill mb-3" id="loginTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="password-tab" data-bs-toggle="tab" 
+                                        data-bs-target="#password" type="button" role="tab" 
+                                        aria-controls="password" aria-selected="true">
+                                    Password
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="ott-tab" data-bs-toggle="tab" 
+                                        data-bs-target="#ott" type="button" role="tab" 
+                                        aria-controls="ott" aria-selected="false">
+                                    One Time Token
+                                </button>
+                            </li>
+                        </ul>
+
+                        <!-- Tab content -->
+                        <div class="tab-content" id="loginTabsContent">
+                            <!-- Password Login Tab -->
+                            <div class="tab-pane fade show active" id="password" role="tabpanel" 
+                                 aria-labelledby="password-tab">
+                                <form th:action="@{/login}" method="post">
+                                    <div class="mb-3">
+                                        <label for="username" class="form-label">Email</label>
+                                        <input type="email" class="form-control" id="username" 
+                                               name="username" required autofocus>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="password" class="form-label">Password</label>
+                                        <input type="password" class="form-control" id="password" 
+                                               name="password" required>
+                                    </div>
+                                    
+                                    <div class="d-grid">
+                                        <button type="submit" class="btn btn-primary">Sign In</button>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <!-- OTT Login Tab -->
+                            <div class="tab-pane fade" id="ott" role="tabpanel" 
+                                 aria-labelledby="ott-tab">
+                                <form th:action="@{/ott/generate}" method="post">
+                                    <div class="mb-3">
+                                        <label for="ott-email" class="form-label">Email</label>
+                                        <input type="email" class="form-control" id="ott-email" 
+                                               name="username" required>
+                                    </div>
+                                    
+                                    <!-- <div class="mb-3">
+                                        <label for="token" class="form-label">One Time Token</label>
+                                        <input type="text" class="form-control" id="token" 
+                                               name="token" required> 
+                                    </div> -->
+                                    
+                                    <div class="d-grid gap-2">
+                                        <button type="submit" class="btn btn-primary">Get Login link</button>
+                                        <!-- <button type="button" class="btn btn-outline-primary" 
+                                                onclick="requestOtt()">Request New Token</button> -->
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS and dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Custom JS for OTT functionality -->
+    <script>
+        function requestOtt() {
+            const email = document.getElementById('ott-email').value;
+            if (!email) {
+                alert('Please enter your email first');
+                return;
+            }
+            
+            fetch('/api/auth/request-ott', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email: email })
+            })
+            .then(response => {
+                if (response.ok) {
+                    alert('One Time Token has been sent to your email');
+                } else {
+                    alert('Failed to request One Time Token');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to request One Time Token');
+            });
+        }
+    </script>
+</body>
+</html>

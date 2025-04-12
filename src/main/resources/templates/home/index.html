@@ -1,0 +1,26 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+    layout:decorate="~{layout}">
+
+<head>
+    <title>[[#{home.index.headline}]]</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+</head>
+
+<body>
+    <div layout:fragment="content">
+        <h1 class="mb-4">[[#{home.index.headline}]]</h1>
+        <p class="mb-5">This application demonstrates how to build a basic web application with authentication using
+            Spring Security.
+        </p>
+        <p class="mb-5">Users can login using traditional username & password or using one-time token (OTT)
+            authentication. The application also demonstrates how to manage users.</p>
+        </p>
+        <p class="mb-4"><a
+                href="https//docs.spring.io/spring-security/reference/servlet/authentication/onetimetoken.html"
+                target\="_blank">Spring Security offers support for One-Time Token (OTT) authentication</a> via the
+            oneTimeTokenLogin() DSL.</p>
+    </div>
+</body>
+
+</html>
