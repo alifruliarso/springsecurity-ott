@@ -30,7 +30,24 @@ Let's dive into the world of One-Time Tokens login with Spring Security! We will
 
 ## 💻 Let’s Build This Thing!
 
+### Maven
+
 To enable the One-Time Token feature, we need to include the `spring-boot-starter-security` and `spring-boot-starter-web` dependencies.
+
+```xml
+<dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+</dependencies>
+```
+
+### Spring Security Configuration
 
 Next, we configure the Spring Security and enable the form-login and One-Time Token Login:
 
@@ -102,6 +119,8 @@ Enable One-Time Token Login support and customize it with `oneTimeTokenLogin()` 
 - `showDefaultSubmitPage(false)` : disable the default One-Time Token submit page.
 - `authenticationSuccessHandler` : Specifies the `AuthenticationSuccessHandler` strategy used to handle a successful user authentication. For demo, we redirect user to the home page.
 
+### Custom OneTimeTokenGenerationSuccessHandler
+
 Next, we need to implement a custom OneTimeTokenGenerationSuccessHandler to deliver the token to the end user.
 
 ```java
@@ -148,6 +167,64 @@ This component will do a number of things:
 - Call `emailService.sendEmail()` to send the email to the user with magic link.
 - For demo, we redirect user to the `/ott/sent` page.
 
+### Custom Success Page
+
+Create a controller and an HTML template to handle this page. For demo purpose, we forward the token to the custom submit page.
+
+```Java
+@Controller
+@RequestMapping("/ott")
+public class OttController {
+  @GetMapping("/sent")
+  public String sent(Model model) {
+    return "ott/sent";
+  }
+
+  @GetMapping("/submit")
+  public String submit(Model model, @RequestParam("token") String token) {
+    model.addAttribute("token", token);
+    return "ott/submit";
+  }
+}
+```
+
+#### **`sent.html`**
+```html
+<html xmlns:th="http://www.thymeleaf.org" xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+        layout:decorate="~{layout}">
+    <head>
+        <title>OTT Sent</title>
+    </head>
+    <body>
+        <div layout:fragment="content">
+            <p>We just sent you an email. Please follow the provided link to log in.</p>
+            <p>For testing here is the <a th:href="${ottSubmitUrl}">submit link</a></p>
+        </div>
+    </body>
+</html>
+```
+
+#### **`submit.html`**
+```html
+<body>
+    <div layout:fragment="content">
+        <div class="d-flex flex-wrap mb-4">
+            <h1 class="flex-grow-1">Login OTT</h1>
+        </div>
+        <form th:action="@{/login/ott}" method="post">
+            <div class="row mb-3">
+                <label for="token" class="form-check-label">Token</label>
+                <input type="text" id="token" name="token" th:value="${token}" placeholder="Token" required="true"
+                    autofocus="autofocus" class="form-control"/>
+            </div>
+            <button class="btn btn-primary" type="submit">Sign in</button>
+        </form>
+    </div>
+</body>
+```
+
+### Custom OneTimeTokenService
+
 Next, create a custom implementation of `OneTimeTokenService` interface. By customizing it, we can have a custom expire time, adding more info into token, and implement custom token value.
 
 ```java
@@ -191,3 +268,120 @@ public class CustomOneTimeTokenService implements OneTimeTokenService {
 - Generating the token and storing it. For demo, we use in memory store.
 - Consuming the token, we validate the token expiration and delete the token from the store.
 
+### Retrieving Users
+
+Create custom `UserDetailsService` implementation to load user-specific data.
+
+```java
+@Service
+@AllArgsConstructor
+public class CustomUserDetailService implements UserDetailsService {
+
+  private final UsersContainerClient usersContainerClient;
+
+  @Override
+  public UserDetails loadUserByUsername(String email) {
+    UserRecord user = usersContainerClient.getUserByEmail(email);
+    if (user == null) {
+      throw new UsernameNotFoundException("User not found");
+    }
+
+    List<SimpleGrantedAuthority> authorities = new java.util.ArrayList<>();
+    authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
+
+    if ("admin@example.com".equals(user.email())) {
+      authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
+    }
+
+    return new org.springframework.security.core.userdetails.User(
+        user.email(), user.password(), authorities);
+  }
+}
+```
+
+The user object is stored and fetched using the `UsersContainerClient` class, which will handle the interaction with GridDB Cloud.
+
+```java
+@Service
+public class UsersContainerClient {
+  private static final String CONTAINER_NAME = "Users";
+  private final RestClient restClient;
+  private final String baseUrl;
+
+  public UsersContainerClient(
+      @Value("${griddb.base-url}") String baseUrl,
+      @Value("${griddb.auth-token}") String authToken) {
+    this.baseUrl = baseUrl;
+    this.restClient =
+        RestClient.builder()
+            .baseUrl(this.baseUrl)
+            .defaultHeader("Authorization", "Basic " + authToken)
+            .defaultHeader("Content-Type", MediaType.APPLICATION_JSON_VALUE)
+            .build();
+  }
+
+  private <T> T post(String uri, Object body, Class<T> responseType) {
+    try {
+      return restClient.post().uri(uri).body(body).retrieve().body(responseType);
+    } catch (GridDbException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new GridDbException(
+          "Failed to execute POST request", HttpStatusCode.valueOf(500), e.getMessage(), e);
+    }
+  }
+
+  public UserRecord getUserByEmail(String email) {
+    String statement =
+        String.format("SELECT id, email, name, \"password\" FROM Users where email == '%s'", email);
+    return getOneUser(statement);
+  }
+
+  private UserRecord getOneUser(String statement) {
+    String type = "sql-select";
+    GridDbCloudSQLSelectInput input = new GridDbCloudSQLSelectInput(type, statement);
+    var response = post("/sql", List.of(input), GridDbCloudSQLOutPut[].class);
+    log.info("Output: {}", response[0]);
+    if (response[0].results().size() == 0) {
+      return null;
+    }
+    UserRecord foundUser = null;
+    for (List<String> row : response[0].results()) {
+      if (row.size() < 4) {
+        break;
+      }
+      foundUser = new UserRecord(row.get(0), row.get(1), row.get(2), row.get(3));
+    }
+    log.info("Found user: {}", foundUser);
+    return foundUser;
+  }
+}
+
+record GridDbCloudSQLSelectInput(String type, @JsonProperty("stmt") String statement) {}
+
+record GridDbCloudSQLOutPut(
+    @JsonProperty("columns") List<GDCColumnInfo> columns,
+    @JsonProperty("results") List<List<String>> results,
+    @JsonProperty("responseSizeByte") long responseSizeByte) {}
+```
+
+- To communicate with GridDB Cloud via HTTP requests, we create a Spring `RestClient` instance with HTTP basic authentication.
+- We `POST` the `sql-select` query and convert the response into `UserRecord`
+
+### Demo
+
+For demo, we have added demo users (`admin@example.com, user@example.com`) on application startup. Full code can be access on [Github](https://github.com/alifruliarso/springsecurity-ott/tree/main).
+
+![onetimetokendemo.gif](onetimetokendemo.gif)
+
+## Conclusion
+
+One-time tokens are a great leap forward in enhancing online security while keeping things user-friendly. Using frameworks like Spring Security can make it easier to implement these advanced security measures.
+
+When using one-time tokens in production, keep these key factors in mind:
+- **Token Validity**: Decide how long each token should stay active.
+- **Delivery Reliability**: Ensure your token delivery method is dependable.
+- **Security**: Make sure the token generation process is cryptographically secure.
+- **Storage Safety**: Store tokens securely to prevent unauthorized access.
+
+By addressing these aspects, you can create a robust and user-friendly security system.
